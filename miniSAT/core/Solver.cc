@@ -29,6 +29,11 @@
 #include "../mtl/Sort.h"
 #include "../core/Solver.h"
 
+#define RESET_STATE 0x00
+#define COMPUTE_CLAUSE_STATE 0x40
+#define COMPUTE_CNF_STATE 0x80
+#define END_STATE 0xC0
+
 using namespace Minisat;
 
 //=================================================================================================
@@ -680,7 +685,7 @@ lbool Solver::search(int nof_conflicts) {
 
 			/* Start of the section modified by Mahesh */
 
-			bool runSubCNFgen = false; // This boolean variable helps to control whether to perform sub CNF generation OR just do timing analysis of the code when its # of variables goes < 30
+			bool runSubCNFgen = true; // This boolean variable helps to control whether to perform sub CNF generation OR just do timing analysis of the code when its # of variables goes < 30
 
 			if (runSubCNFgen) {
 
@@ -710,7 +715,7 @@ lbool Solver::search(int nof_conflicts) {
 							mtime); // Display the sub CNF generation function execution time
 
 					// Display the list of commands that have been created for the sub_cnf -- Required for debugging only
-					if (false) { // Make this true if you need to display nad analyze the list of commands generated
+					if (true) { // Make this true if you need to display nad analyze the list of commands generated
 						printf(
 								"Below are the commands geenrated for the sub CNF\n");
 						displayCommands(sendData); // This function displays the contents of sendData is a readable form
@@ -1023,7 +1028,7 @@ void Solver::subCNFgen(std::list<char>& sendData) {
 
 	char command;
 
-	command = (state << 6) & 0xC0; // 1100 0000 -- Encode the state = RESET..
+	command = RESET_STATE; // 0000 0000 -- Encode the state = RESET..
 	sendData.push_back(command);
 
 // Reduce the original CNF to CNF with variables less than 30
@@ -1058,21 +1063,18 @@ void Solver::subCNFgen(std::list<char>& sendData) {
 					}
 				}
 
-				state = 1; // Solve Clause
-				command = (state << 6) & 0xC0; // 1100 0000 -- Encode the state
+				state = COMPUTE_CLAUSE_STATE; // Solve Clause
 				command = command | ((newvarsdB[varIndex] << 1) & 0x3E); // 0011 1110 -- Encode the variable index
 				command = command | ((varNeg) & 0x01); // 0000 0001 -- Encode the variable negation control
 				sendData.push_back(command);
 			}
 		}
 
-		state = 2; // Solve CNF and reset clause
-		command = (state << 6) & 0xC0; // 1100 0000 -- Encode the state
+		command = COMPUTE_CNF_STATE; // 1000 0000 -- Solve CNF and reset clause
 		sendData.push_back(command);
 	}
 
-	state = 3; // End..When End is issued a valid result is expected from the output of SAT hardware
-	command = (state << 6) & 0xC0; // 1100 0000 -- Encode the state
+	command = END_STATE; // 1100 0000 -- End..When End is issued a valid result is expected from the output of SAT hardware
 	sendData.push_back(command);
 }
 
