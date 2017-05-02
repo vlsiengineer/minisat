@@ -680,40 +680,42 @@ lbool Solver::search(int nof_conflicts) {
 
 			/* Start of the section modified by Mahesh */
 
-			bool runSubCNFgen = false;
+			bool runSubCNFgen = false; // This boolean variable helps to control whether to perform sub CNF generation OR just do timing analysis of the code when its # of variables goes < 30
 
 			if (runSubCNFgen) {
 
-				std::list<char> sendData;
+				// Sub CNF generation : Whenever the number of current variables goes below 30 our motive is to call the SAT hardware that will check if this sub CNF equation with less than 30 variables is
+				//                      SAT or UNSAT. SAT hardware processes one literal ata time and each literal is represented using 8 bits within which bits <7:6> represent state control bits, <5:1>
+				//                      represents index of the variable (Ex: x1 will have index 0, x2 - 1...x32 - 31) and bit <0> represents whether the literal is negated or not.
+				//                      Since miniSAT software does not repesent the CNF equation in this form we need to generate CNF equation in this form for the hardware to process it.
+				//                      Note: Since we only use 5 bits for variable position we can accomodate only 32 variables max.
+
+				std::list<char> sendData; // List data structure that will eventually contain all the commands representing a sub CNF equation with less than 30 variables.
 				int currentActiveVars = 0;
-				currentActiveVars = nVars() - nAssigns(); // The current number of assigned literals.
+				currentActiveVars = nVars() - nAssigns(); // The current number of assigned literals = Total # of variables - # of assigned variables
 
-				if ((currentActiveVars <= 30) && (currentActiveVars > 0)
-						&& !delveStart) {
+				if ((currentActiveVars <= 30) && (currentActiveVars > 0)) { // Check if the # of active Variables is less than 30 and also not equal to 0
 
-					delveStart = true;
+					long mtime, secs, usecs; // Variables used for capturing execution time of sub CNF generation function
 
-					long mtime, secs, usecs;
-					gettimeofday(&startTime, NULL);
+					gettimeofday(&startTime, NULL); // Capture the start time before running sub CNF generation function
 
-					subCNFgen(sendData);
+					subCNFgen(sendData); // This function will generate sub CNF equation in list of commands form as required by SAT hardware. It will eventually update sendDATA.
 
-					gettimeofday(&endTime, NULL);
-					secs = endTime.tv_sec - startTime.tv_sec;
-					usecs = endTime.tv_usec - startTime.tv_usec;
-					mtime = ((secs) * 1000000 + usecs) + 0.5;
+					gettimeofday(&endTime, NULL); // Capture the end time after running sub CNF generation function
+					secs = endTime.tv_sec - startTime.tv_sec; // Compute execution time in seconds.
+					usecs = endTime.tv_usec - startTime.tv_usec; // Compute the fractional execution time in microseconds
+					mtime = ((secs) * 1000000 + usecs) + 0.5; // Compute the complete execution time in microseconds
 					printf("Sub CNF generation exectuion time: %ld us\n",
-							mtime);
+							mtime); // Display the sub CNF generation function execution time
 
 					// Display the list of commands that have been created for the sub_cnf -- Required for debugging only
-					if (false) {
+					if (false) { // Make this true if you need to display nad analyze the list of commands generated
 						printf(
 								"Below are the commands geenrated for the sub CNF\n");
-						displayCommands(sendData);
+						displayCommands(sendData); // This function displays the contents of sendData is a readable form
 					}
 
-				} else if ((currentActiveVars > 30) && delveStart) {
-					delveStart = false;
 				}
 			} else {
 				/* This section of the code analyzes the amount of time algorithm deals with variables < 30 which is whehn the SAT hardware would be called */
@@ -1006,7 +1008,7 @@ void Solver::garbageCollect() {
 }
 
 /* New functions added by Mahesh */
-
+/* Note that these functions have been declared in Solver.h */
 /*
  * This function helps to geenrate the sub CNF commands whenever the current number of active variables is within the limits of SAT hardware
  */
@@ -1079,6 +1081,8 @@ void Solver::subCNFgen(std::list<char>& sendData) {
  */
 void Solver::displayCommands(std::list<char>& sendData) {
 
+// This function iterates through every command in the sendData and also decodes the bits to their respective representations such as state bits, Variable index values, variable negation value
+
 	int commandCounter = 1;
 	printf("Command-X:: ");
 	printf("State | Index | Negation \n");
@@ -1086,9 +1090,9 @@ void Solver::displayCommands(std::list<char>& sendData) {
 			command != sendData.end(); ++command) {
 
 		char commandVal = *command;
-		int stateVal = (commandVal & 0xC0) >> 6;
-		int varIndexVal = (commandVal & 0x3E) >> 1;
-		int negPosVal = (commandVal & 0x01);
+		int stateVal = (commandVal & 0xC0) >> 6;          // state bits
+		int varIndexVal = (commandVal & 0x3E) >> 1;      // Varialbe index value
+		int negPosVal = (commandVal & 0x01);      // Variable negation value
 
 		printf("Command-%d:: ", commandCounter);
 		printf("%d     | %d     | %d \n", stateVal, varIndexVal, negPosVal);
@@ -1101,6 +1105,13 @@ void Solver::displayCommands(std::list<char>& sendData) {
  */
 
 void Solver::timingAnalyzer() {
+
+// This function tracks # of times the non-assigned variables goes below 30 (Which is when the SAT hardware will be called) and also the total amount 
+// of time it spends with non-assigned varialbes < 30
+//
+// We use a global static boolean varialbe called delveStart (Declared and initilized to false in Solver.h). This boolean variable would help to track whenever the # of non-assigned varialbes in less than 30
+// We track the number of times the algorithm has # of non-assigned variables less than 30 using variable delveTracker
+
 	int currentActiveVars = 0;
 	currentActiveVars = nVars() - nAssigns(); // The current number of assigned literals.
 	if ((currentActiveVars <= 30) && (currentActiveVars > 0) && !delveStart) {
@@ -1118,3 +1129,4 @@ void Solver::timingAnalyzer() {
 	}
 
 }
+
