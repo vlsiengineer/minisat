@@ -32,7 +32,7 @@
 #define RESET_STATE 0x00
 #define COMPUTE_CLAUSE_STATE 0x40
 #define COMPUTE_CNF_STATE 0x80
-#define END_STATE 0xC0
+#define RESET_CLAUSE_STATE 0xC0
 
 using namespace Minisat;
 
@@ -1072,10 +1072,9 @@ void Solver::subCNFgen(std::list<char>& sendData) {
 
 		command = COMPUTE_CNF_STATE; // 1000 0000 -- Solve CNF and reset clause
 		sendData.push_back(command);
+		command = RESET_CLAUSE_STATE; // 1100 0000 -- Reset clause only
+		sendData.push_back(command);
 	}
-
-	command = END_STATE; // 1100 0000 -- End..When End is issued a valid result is expected from the output of SAT hardware
-	sendData.push_back(command);
 }
 
 /*
