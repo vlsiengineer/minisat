@@ -280,6 +280,7 @@ protected:
 	void subCNFgen(std::list<char>& sendData);      // Generate sub CNF for SAT hardware processing
 	void displayCommands(std::list<char>& sendData);   // Function to display commands
 	void timingAnalyzer();   // Function to analyze delve time of the algorithm during which it deals with active variable < 30
+	void solveSAT(std::list<char>& sendData);   // solveSAT is the function that will send the CNF commands to our SAT accelerator and identify the result using hardwareResult bool variable
 
 	// Static helpers:
 	//

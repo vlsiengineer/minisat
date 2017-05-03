@@ -33,6 +33,7 @@
 #define COMPUTE_CLAUSE_STATE 0x40
 #define COMPUTE_CNF_STATE 0x80
 #define RESET_CLAUSE_STATE 0xC0
+#define TARGET_VARIABLES 30
 
 using namespace Minisat;
 
@@ -685,7 +686,9 @@ lbool Solver::search(int nof_conflicts) {
 
 			/* Start of the section modified by Mahesh */
 
-			bool runSubCNFgen = true; // This boolean variable helps to control whether to perform sub CNF generation OR just do timing analysis of the code when its # of variables goes < 30
+			bool runSubCNFgen = false; // This boolean variable helps to control whether to perform sub CNF generation OR just do timing analysis of the code when its # of variables goes < 30
+
+			std::list<char> sendData; // List data structure that will eventually contain all the commands representing a sub CNF equation with less than 30 variables.
 
 			if (runSubCNFgen) {
 
@@ -695,11 +698,11 @@ lbool Solver::search(int nof_conflicts) {
 				//                      Since miniSAT software does not repesent the CNF equation in this form we need to generate CNF equation in this form for the hardware to process it.
 				//                      Note: Since we only use 5 bits for variable position we can accomodate only 32 variables max.
 
-				std::list<char> sendData; // List data structure that will eventually contain all the commands representing a sub CNF equation with less than 30 variables.
 				int currentActiveVars = 0;
 				currentActiveVars = nVars() - nAssigns(); // The current number of assigned literals = Total # of variables - # of assigned variables
 
-				if ((currentActiveVars <= 30) && (currentActiveVars > 0)) { // Check if the # of active Variables is less than 30 and also not equal to 0
+				if ((currentActiveVars <= TARGET_VARIABLES)
+						&& (currentActiveVars > 0)) { // Check if the # of active Variables is less than 30 and also not equal to 0
 
 					long mtime, secs, usecs; // Variables used for capturing execution time of sub CNF generation function
 
@@ -715,10 +718,21 @@ lbool Solver::search(int nof_conflicts) {
 							mtime); // Display the sub CNF generation function execution time
 
 					// Display the list of commands that have been created for the sub_cnf -- Required for debugging only
-					if (true) { // Make this true if you need to display nad analyze the list of commands generated
+					if (false) { // Make this true if you need to display nad analyze the list of commands generated
 						printf(
 								"Below are the commands geenrated for the sub CNF\n");
 						displayCommands(sendData); // This function displays the contents of sendData is a readable form
+					}
+
+					// For the actual implementation please replace 'false' with function call solveSAT(sendData) to run SAT accelerator at this point.
+					bool hardwareResult = false; //solveSAT(sendData); // solveSAT is the function that will send the CNF commands to our SAT accelerator and identify the result using hardwareResult bool variable
+
+					if (hardwareResult) {
+						return l_True; // Algorithm should end if the hardware identifies the sub CNF as SAT
+					} else {
+						// Since UNSAT -> We need to continue the algorithm further
+						// Backtrack one-level up and divert the algorithm to a different branch as this branch is tending towards UNSAT
+						cancelUntil((decisionLevel() - 1)); // Backtrack to one level up from current decision level
 					}
 
 				}
@@ -726,6 +740,7 @@ lbool Solver::search(int nof_conflicts) {
 				/* This section of the code analyzes the amount of time algorithm deals with variables < 30 which is whehn the SAT hardware would be called */
 				timingAnalyzer();
 			}
+
 // 			/* End of the section modified by Mahesh */
 
 			if (nof_conflicts >= 0 && conflictC >= nof_conflicts
@@ -1115,10 +1130,11 @@ void Solver::timingAnalyzer() {
 
 	int currentActiveVars = 0;
 	currentActiveVars = nVars() - nAssigns(); // The current number of assigned literals.
-	if ((currentActiveVars <= 30) && (currentActiveVars > 0) && !delveStart) {
+	if ((currentActiveVars <= TARGET_VARIABLES) && (currentActiveVars > 0)
+			&& !delveStart) {
 		delveStart = true;
 		gettimeofday(&startTime, NULL);
-	} else if ((currentActiveVars > 30) && delveStart) {
+	} else if ((currentActiveVars > TARGET_VARIABLES) && delveStart) {
 		delveStart = false;
 		long mtime, secs, usecs;
 		gettimeofday(&endTime, NULL);
